@@ -37,6 +37,7 @@
 - (BOOL) isKeyboardVisible;
 
 #if !TARGET_OS_TV
+- (void) setGamingRevealExclusionRect:(CGRect)rect;
 - (void) updateCursorLocation:(CGPoint)location isMouse:(BOOL)isMouse;
 #endif
 

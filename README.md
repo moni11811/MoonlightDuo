@@ -2,7 +2,7 @@
 
 Custom Moonlight iOS client for the Duo streaming setup.
 
-> **Publication status:** The privacy-reviewed build 11 source is published here as a preview. No public pre-signed installer is available. Build and sign this fork with your own Apple account for reinstallation. Build 11 failed hands-on validation: the Gaming mode-switcher swipe is still broken and the trackpad is missing. It is not a recommended reinstall release. A corrected snapshot is pending.
+> **Publication status:** The privacy-reviewed build 12 source is published here as a candidate preview. No public pre-signed installer is available. Build 12 has not been installed or user-tested. It changes the Gaming reveal gesture and remote touch exclusion after build 11 failed hands-on validation, but the Gaming swipe and trackpad behavior remain unverified. It is not a recommended reinstall release.
 
 ## Source and dependencies
 
@@ -16,7 +16,7 @@ open Moonlight.xcodeproj
 
 Use a current Xcode capable of building the project for your target iOS version. Allow Xcode to resolve the Swift packages pinned in `Moonlight.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved`. Choose the Moonlight iOS target and your device. Under **Signing & Capabilities**, select your own Apple development team and set a unique bundle identifier if needed, then build and run. Signing credentials, provisioning profiles, and device registration belong in your own Apple account and must stay out of this repository. Apple's development provisioning can expire, so an IPA signed for one device is not an indefinite public installer.
 
-The source snapshot came from the installed build 11 development tree, but a private host-name comparison was replaced with a generic safe-resize bootstrap flag for publication. On the configured Duo host that selects the same path. The published source is not byte-identical to the privately signed IPA; rebuild and verify it on your device.
+The source snapshot came from the build 12 development tree, but a private host-name comparison was replaced with a generic safe-resize bootstrap flag for publication. On the configured Duo host that selects the same path. The published source is not byte-identical to a private signed build; rebuild and verify it on your device when device testing is authorized.
 
 ## Releases and verification
 

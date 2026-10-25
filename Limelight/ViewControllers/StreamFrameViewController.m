@@ -58,7 +58,8 @@
     UIButton *_keyboardButton;
     UIButton *_disconnectButton;
     UIButton *_trackpadSideButton;
-    UIView *_gamingRevealZone;
+    UIPanGestureRecognizer *_gamingRevealRecognizer;
+    CGRect _gamingRevealStartRect;
     UIView *_portraitSplitHandle;
     UIView *_landscapeSplitHandle;
     UIView *_controlPanel;
@@ -190,14 +191,12 @@
     _exitSwipeRecognizer.delaysTouchesEnded = NO;
     
     [self.view addGestureRecognizer:_exitSwipeRecognizer];
-    _gamingRevealZone = [[UIView alloc] init];
-    _gamingRevealZone.backgroundColor = UIColor.clearColor;
-    UIPanGestureRecognizer *reveal = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(revealGamingMenu:)];
-    reveal.cancelsTouchesInView = NO;
-    reveal.delaysTouchesBegan = NO;
-    reveal.delaysTouchesEnded = NO;
-    [_gamingRevealZone addGestureRecognizer:reveal];
-    [self.view addSubview:_gamingRevealZone];
+    _gamingRevealRecognizer = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(revealGamingMenu:)];
+    _gamingRevealRecognizer.delegate = self;
+    _gamingRevealRecognizer.cancelsTouchesInView = NO;
+    _gamingRevealRecognizer.delaysTouchesBegan = NO;
+    _gamingRevealRecognizer.delaysTouchesEnded = NO;
+    [self.view addGestureRecognizer:_gamingRevealRecognizer];
 #endif
     
     _tipLabel = [[UILabel alloc] init];
@@ -523,13 +522,13 @@
     }
     [_trackpadSideButton setTitle:_trackpadOnLeft ? @"Pad: Left" : @"Pad: Right" forState:UIControlStateNormal];
     _desktopBar.hidden = !desktopLayout && !_gamingMenuVisible;
-    _gamingRevealZone.hidden = desktopLayout || _gamingMenuVisible;
-    // Start below the OS top-edge gesture area. Give a downward swipe enough
-    // room to begin without requiring near-perfect aim at an invisible target.
+    // The recognizer lives on the stable root view. This rectangle only gates
+    // where the gesture may start; it is never a hidden hit-testing overlay.
     CGFloat revealWidth = MIN(MAX(0, safe.size.width - 16),
                               MIN(136, MAX(96, safe.size.width * 0.3)));
-    _gamingRevealZone.frame = CGRectMake(CGRectGetMaxX(safe) - revealWidth - 8,
-                                         safe.origin.y + 12, revealWidth, 96);
+    _gamingRevealStartRect = desktopLayout || _gamingMenuVisible ? CGRectNull :
+        CGRectMake(CGRectGetMaxX(safe) - revealWidth - 8,
+                   safe.origin.y + 12, revealWidth, 96);
     NSString *layoutName = desktopLayout ? @"Desktop" : @"Gaming";
     NSString *choice = self.streamConfig.presentationMode == AVLayoutAutomatic ? @"Auto" : @"Manual";
     [_layoutButton setTitle:[NSString stringWithFormat:@"%@: %@", choice, layoutName] forState:UIControlStateNormal];
@@ -564,7 +563,6 @@
         _desktopBar.frame = CGRectMake(CGRectGetMaxX(safe) - MIN(safe.size.width - 16, 170) - 8,
                                       safe.origin.y + 8, MIN(safe.size.width - 16, 170), 50);
         [self.view bringSubviewToFront:_desktopBar];
-        if (!_gamingMenuVisible) [self.view bringSubviewToFront:_gamingRevealZone];
     }
     if (self.view.window != nil) {
         AVSize current = AVEncodedSize(viewport.size.width, viewport.size.height, self.view.window.screen.scale);
@@ -593,6 +591,10 @@
     } else {
         _streamView.frame = viewport;
     }
+#if !TARGET_OS_TV
+    [_streamView setGamingRevealExclusionRect:CGRectIsNull(_gamingRevealStartRect) ?
+        CGRectNull : [_streamView convertRect:_gamingRevealStartRect fromView:self.view]];
+#endif
     _stageLabel.center = CGPointMake(CGRectGetMidX(viewport), CGRectGetMidY(viewport));
     _spinner.center = CGPointMake(CGRectGetMidX(viewport), CGRectGetMidY(viewport) - 36);
     _tipLabel.center = CGPointMake(CGRectGetMidX(viewport), CGRectGetMaxY(viewport) - 36);
@@ -679,6 +681,19 @@
         self->_gamingMenuVisible = NO;
         [self.view setNeedsLayout];
     });
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch {
+    if (gestureRecognizer != _gamingRevealRecognizer) return YES;
+    if (touch.type != UITouchTypeDirect || _gamingMenuVisible) return NO;
+    [self.view layoutIfNeeded];
+    return _controlPanel.hidden && !CGRectIsNull(_gamingRevealStartRect) &&
+        CGRectContainsPoint(_gamingRevealStartRect, [touch locationInView:self.view]);
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+       shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    return gestureRecognizer == _gamingRevealRecognizer || otherGestureRecognizer == _gamingRevealRecognizer;
 }
 
 - (void)desktopShortcutTapped:(UIButton *)button {

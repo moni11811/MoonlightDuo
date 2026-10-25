@@ -22,6 +22,9 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
     OnScreenControls* onScreenControls;
     
     KeyboardInputField* keyInputField;
+#if !TARGET_OS_TV
+    CGRect gamingRevealExclusionRect;
+#endif
     
     float streamAspectRatio;
     __weak CALayer* videoLayer;
@@ -264,6 +267,20 @@ static const double X1_MOUSE_SPEED_DIVISOR = 2.5;
 - (BOOL)isKeyboardVisible {
     return keyInputField.isFirstResponder;
 }
+
+#if !TARGET_OS_TV
+- (void)setGamingRevealExclusionRect:(CGRect)rect {
+    gamingRevealExclusionRect = rect;
+}
+
+- (BOOL)pointInside:(CGPoint)point withEvent:(UIEvent *)event {
+    // Let the parent own the Gaming reveal swipe before any remote touch or
+    // mouse input can be sent from this small reserved corner.
+    if (!CGRectIsNull(gamingRevealExclusionRect) &&
+        CGRectContainsPoint(gamingRevealExclusionRect, point)) return NO;
+    return [super pointInside:point withEvent:event];
+}
+#endif
 
 - (void)toggleKeyboard {
     if (keyInputField.isFirstResponder) {
