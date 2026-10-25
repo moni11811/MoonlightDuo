@@ -2,7 +2,7 @@
 
 Custom Moonlight iOS client for the Duo streaming setup.
 
-> **Publication status:** The privacy-reviewed build 11 source is published here as a preview. No public pre-signed installer is available. Build and sign this fork with your own Apple account for reinstallation. Build 11 changes the Gaming mode-switcher swipe reveal area and threshold, but the gesture has not yet been confirmed by hands-on testing.
+> **Publication status:** The privacy-reviewed build 11 source is published here as a preview. No public pre-signed installer is available. Build and sign this fork with your own Apple account for reinstallation. Build 11 failed hands-on validation: the Gaming mode-switcher swipe is still broken and the trackpad is missing. It is not a recommended reinstall release. A corrected snapshot is pending.
 
 ## Source and dependencies
 
