@@ -1,0 +1,292 @@
+//
+//  AppDelegate.m
+//  Moonlight
+//
+//  Created by Diego Waxemberg on 1/17/14.
+//  Copyright (c) 2014 Moonlight Stream. All rights reserved.
+//
+
+#import "AppDelegate.h"
+#if DEBUG && !TARGET_OS_TV
+#import "ViewControllers/StreamFrameViewController.h"
+#import "Stream/StreamConfiguration.h"
+#endif
+
+#if !TARGET_OS_TV
+// iOS 27 requires a scene lifecycle. Keep the established storyboard and
+// AppDelegate database/shortcut handling rather than replacing the app shell.
+#if DEBUG
+// Layout-only QA surface. The child sees wide bounds while the simulator stays
+// portrait; this does not emulate a physical rotation or a streaming session.
+@interface MoonlightWideFixtureCanvas : UIViewController
+@property (strong, nonatomic) UIViewController *content;
+@end
+
+@implementation MoonlightWideFixtureCanvas
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    [self addChildViewController:self.content];
+    [self.view addSubview:self.content.view];
+    [self.content didMoveToParentViewController:self];
+}
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    CGSize size = self.view.bounds.size;
+    self.content.view.transform = CGAffineTransformIdentity;
+    self.content.view.bounds = CGRectMake(0, 0, size.height, size.width);
+    self.content.view.center = CGPointMake(size.width / 2.0, size.height / 2.0);
+    self.content.view.transform = CGAffineTransformMakeRotation(M_PI_2);
+}
+@end
+#endif
+
+@interface MoonlightSceneDelegate : UIResponder <UIWindowSceneDelegate>
+@property (strong, nonatomic) UIWindow *window;
+@end
+
+@implementation MoonlightSceneDelegate
+- (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
+    if (![scene isKindOfClass:[UIWindowScene class]]) return;
+    NSString *storyboardName = UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad ? @"iPad" : @"iPhone";
+    UIStoryboard *storyboard = [UIStoryboard storyboardWithName:storyboardName bundle:nil];
+    self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
+    UIViewController *root = [storyboard instantiateInitialViewController];
+#if DEBUG
+    if ([NSProcessInfo.processInfo.arguments containsObject:@"-MoonlightLayoutFixture"]) {
+        StreamConfiguration *config = [[StreamConfiguration alloc] init];
+        config.appName = @"Local layout fixture";
+        config.width = 1398;
+        config.height = 920;
+        config.frameRate = 60;
+        config.presentationMode = 0;
+        StreamFrameViewController *fixture = [[StreamFrameViewController alloc] init];
+        fixture.streamConfig = config;
+        root = [[UINavigationController alloc] initWithRootViewController:fixture];
+        if ([NSProcessInfo.processInfo.arguments containsObject:@"-MoonlightFixtureWideViewport"]) {
+            MoonlightWideFixtureCanvas *canvas = [[MoonlightWideFixtureCanvas alloc] init];
+            canvas.content = root;
+            root = canvas;
+        }
+    }
+#endif
+    self.window.rootViewController = root;
+    [self.window makeKeyAndVisible];
+    ((AppDelegate *)UIApplication.sharedApplication.delegate).window = self.window;
+    UIApplicationShortcutItem *shortcut = options.shortcutItem;
+    if (shortcut != nil) {
+        ((AppDelegate *)UIApplication.sharedApplication.delegate).pcUuidToLoad = shortcut.userInfo[@"UUID"];
+    }
+}
+
+- (void)windowScene:(UIWindowScene *)windowScene performActionForShortcutItem:(UIApplicationShortcutItem *)shortcutItem completionHandler:(void (^)(BOOL succeeded))completionHandler {
+    AppDelegate *delegate = (AppDelegate *)UIApplication.sharedApplication.delegate;
+    delegate.pcUuidToLoad = shortcutItem.userInfo[@"UUID"];
+    delegate.shortcutCompletionHandler = completionHandler;
+}
+@end
+#endif
+
+@implementation AppDelegate
+
+@synthesize managedObjectContext = _managedObjectContext;
+@synthesize managedObjectModel = _managedObjectModel;
+@synthesize persistentStoreCoordinator = _persistentStoreCoordinator;
+
+static NSOperationQueue* mainQueue;
+
+#if TARGET_OS_TV
+static NSString* DB_NAME = @"Moonlight_tvOS.bin";
+#else
+static NSString* DB_NAME = @"Limelight_iOS.sqlite";
+#endif
+
+- (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
+#if !TARGET_OS_TV
+    UIApplicationShortcutItem* shortcut = [launchOptions valueForKey:UIApplicationLaunchOptionsShortcutItemKey];
+    if (shortcut != nil) {
+        _pcUuidToLoad = (NSString*)[shortcut.userInfo objectForKey:@"UUID"];
+    }
+#endif
+    return YES;
+}
+
+#if !TARGET_OS_TV
+- (void)application:(UIApplication *)application performActionForShortcutItem:(UIApplicationShortcutItem *)shortcutItem completionHandler:(void (^)(BOOL succeeded))completionHandler {
+    _pcUuidToLoad = (NSString*)[shortcutItem.userInfo objectForKey:@"UUID"];
+    _shortcutCompletionHandler = completionHandler;
+}
+#endif
+
+- (void)applicationWillResignActive:(UIApplication *)application
+{
+    // Sent when the application is about to move from active to inactive state. This can occur for certain types of temporary interruptions (such as an incoming phone call or SMS message) or when the user quits the application and it begins the transition to the background state.
+    // Use this method to pause ongoing tasks, disable timers, and throttle down OpenGL ES frame rates. Games should use this method to pause the game.
+}
+
+- (void)applicationDidEnterBackground:(UIApplication *)application
+{
+    // Use this method to release shared resources, save user data, invalidate timers, and store enough application state information to restore your application to its current state in case it is terminated later.
+    // If your application supports background execution, this method is called instead of applicationWillTerminate: when the user quits.
+}
+
+- (void)applicationWillEnterForeground:(UIApplication *)application
+{
+    // Called as part of the transition from the background to the inactive state; here you can undo many of the changes made on entering the background.
+}
+
+- (void)applicationDidBecomeActive:(UIApplication *)application
+{
+    // Restart any tasks that were paused (or not yet started) while the application was inactive. If the application was previously in the background, optionally refresh the user interface.
+}
+
+- (void)applicationWillTerminate:(UIApplication *)application
+{
+    // Saves changes in the application's managed object context before the application terminates.
+    [self saveContext];
+}
+
+- (void)saveContext
+{
+    NSManagedObjectContext *managedObjectContext = [self managedObjectContext];
+    if (managedObjectContext != nil) {
+        [managedObjectContext performBlock:^{
+            if (![managedObjectContext hasChanges]) {
+                return;
+            }
+            NSError *error = nil;
+            if (![managedObjectContext save:&error]) {
+                Log(LOG_E, @"Critical database error: %@, %@", error, [error userInfo]);
+            }
+            
+#if TARGET_OS_TV
+            NSData* dbData = [NSData dataWithContentsOfURL:[[[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] lastObject] URLByAppendingPathComponent:DB_NAME]];
+            [[NSUserDefaults standardUserDefaults] setObject:dbData forKey:DB_NAME];
+#endif
+        }];
+    }
+}
+
+#pragma mark - Core Data stack
+
+// Returns the managed object context for the application.
+// If the context doesn't already exist, it is created and bound to the persistent store coordinator for the application.
+- (NSManagedObjectContext *)managedObjectContext
+{
+    if (_managedObjectContext != nil) {
+        return _managedObjectContext;
+    }
+    
+    NSPersistentStoreCoordinator *coordinator = [self persistentStoreCoordinator];
+    if (coordinator != nil) {
+        _managedObjectContext = [[NSManagedObjectContext alloc] initWithConcurrencyType:NSPrivateQueueConcurrencyType];
+        [_managedObjectContext setPersistentStoreCoordinator:coordinator];
+    }
+    return _managedObjectContext;
+}
+
+// Returns the managed object model for the application.
+// If the model doesn't already exist, it is created from the application's model.
+- (NSManagedObjectModel *)managedObjectModel
+{
+    if (_managedObjectModel != nil) {
+        return _managedObjectModel;
+    }
+    _managedObjectModel = [NSManagedObjectModel mergedModelFromBundles:nil];
+    return _managedObjectModel;
+}
+
+// Returns the persistent store coordinator for the application.
+// If the coordinator doesn't already exist, it is created and the application's store added to it.
+- (NSPersistentStoreCoordinator *)persistentStoreCoordinator
+{
+    if (_persistentStoreCoordinator != nil) {
+        return _persistentStoreCoordinator;
+    }
+    
+    NSError *error = nil;
+    _persistentStoreCoordinator = [[NSPersistentStoreCoordinator alloc] initWithManagedObjectModel:[self managedObjectModel]];
+    NSDictionary *options = [NSDictionary dictionaryWithObjectsAndKeys:
+                             [NSNumber numberWithBool:YES], NSMigratePersistentStoresAutomaticallyOption,
+                             [NSNumber numberWithBool:YES], NSInferMappingModelAutomaticallyOption, nil];
+    NSString* storeType;
+    
+#if TARGET_OS_TV
+    // Use a binary store for tvOS since we will need exclusive access to the file
+    // to serialize into NSUserDefaults.
+    storeType = NSBinaryStoreType;
+#else
+    storeType = NSSQLiteStoreType;
+#endif
+    
+    // We must ensure the persistent store is ready to opened
+    [self preparePersistentStore];
+    
+    if (![_persistentStoreCoordinator addPersistentStoreWithType:storeType configuration:nil URL:[self getStoreURL] options:options error:&error]) {
+        // Log the error
+        Log(LOG_E, @"Critical database error: %@, %@", error, [error userInfo]);
+        
+        // Drop the database
+        [self dropDatabase];
+        
+        // Try again
+        return [self persistentStoreCoordinator];
+    }
+    
+    return _persistentStoreCoordinator;
+}
+
+#pragma mark - Application's Documents directory
+
+// Returns the URL to the application's Documents directory.
+- (NSURL *)applicationDocumentsDirectory
+{
+    return [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory inDomains:NSUserDomainMask] lastObject];
+}
+
+- (void) dropDatabase
+{
+    // Delete the file on disk
+    [[NSFileManager defaultManager] removeItemAtURL:[self getStoreURL] error:nil];
+    
+#if TARGET_OS_TV
+    // Also delete the copy in the NSUserDefaults on tvOS
+    [[NSUserDefaults standardUserDefaults] removeObjectForKey:DB_NAME];
+#endif
+}
+
+- (void) preparePersistentStore
+{
+#if TARGET_OS_TV
+    // On tvOS, we may need to inflate the DB from NSUserDefaults
+    NSArray *paths = NSSearchPathForDirectoriesInDomains(NSCachesDirectory, NSUserDomainMask, YES);
+    NSString *cacheDirectory = [paths objectAtIndex:0];
+    NSString *dbPath = [cacheDirectory stringByAppendingPathComponent:DB_NAME];
+    
+    // Always prefer the on disk version
+    if (![[NSFileManager defaultManager] fileExistsAtPath:dbPath]) {
+        // If that is unavailable, inflate it from NSUserDefaults
+        NSData* data = [[NSUserDefaults standardUserDefaults] dataForKey:DB_NAME];
+        if (data != nil) {
+            Log(LOG_I, @"Inflating database from NSUserDefaults");
+            [data writeToFile:dbPath atomically:YES];
+        }
+        else {
+            Log(LOG_I, @"No database on disk or in NSUserDefaults");
+        }
+    }
+    else {
+        Log(LOG_I, @"Using cached database");
+    }
+#endif
+}
+
+- (NSURL*) getStoreURL {
+#if TARGET_OS_TV
+    // We use the cache folder to store our database on tvOS
+    return [[[[NSFileManager defaultManager] URLsForDirectory:NSCachesDirectory inDomains:NSUserDomainMask] lastObject] URLByAppendingPathComponent:DB_NAME];
+#else
+    return [[self applicationDocumentsDirectory] URLByAppendingPathComponent:DB_NAME];
+#endif
+}
+
+@end
