@@ -194,6 +194,8 @@
     _gamingRevealZone.backgroundColor = UIColor.clearColor;
     UIPanGestureRecognizer *reveal = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(revealGamingMenu:)];
     reveal.cancelsTouchesInView = NO;
+    reveal.delaysTouchesBegan = NO;
+    reveal.delaysTouchesEnded = NO;
     [_gamingRevealZone addGestureRecognizer:reveal];
     [self.view addSubview:_gamingRevealZone];
 #endif
@@ -522,8 +524,12 @@
     [_trackpadSideButton setTitle:_trackpadOnLeft ? @"Pad: Left" : @"Pad: Right" forState:UIControlStateNormal];
     _desktopBar.hidden = !desktopLayout && !_gamingMenuVisible;
     _gamingRevealZone.hidden = desktopLayout || _gamingMenuVisible;
-    _gamingRevealZone.frame = CGRectMake(MAX(safe.origin.x, CGRectGetMaxX(safe) - 104),
-                                         safe.origin.y + 24, 96, 58);
+    // Start below the OS top-edge gesture area. Give a downward swipe enough
+    // room to begin without requiring near-perfect aim at an invisible target.
+    CGFloat revealWidth = MIN(MAX(0, safe.size.width - 16),
+                              MIN(136, MAX(96, safe.size.width * 0.3)));
+    _gamingRevealZone.frame = CGRectMake(CGRectGetMaxX(safe) - revealWidth - 8,
+                                         safe.origin.y + 12, revealWidth, 96);
     NSString *layoutName = desktopLayout ? @"Desktop" : @"Gaming";
     NSString *choice = self.streamConfig.presentationMode == AVLayoutAutomatic ? @"Auto" : @"Manual";
     [_layoutButton setTitle:[NSString stringWithFormat:@"%@: %@", choice, layoutName] forState:UIControlStateNormal];
@@ -660,9 +666,10 @@
 }
 
 - (void)revealGamingMenu:(UIPanGestureRecognizer *)pan {
-    if (pan.state != UIGestureRecognizerStateChanged || !_controlPanel.hidden || _gamingMenuVisible) return;
+    if ((pan.state != UIGestureRecognizerStateBegan && pan.state != UIGestureRecognizerStateChanged) ||
+        !_controlPanel.hidden || _gamingMenuVisible) return;
     CGPoint travel = [pan translationInView:self.view];
-    if (travel.y < 42 || fabs(travel.x) > travel.y * 0.6) return;
+    if (travel.y < 24 || fabs(travel.x) > travel.y * 0.6) return;
     _gamingMenuVisible = YES;
     NSUInteger generation = ++_gamingMenuGeneration;
     [self.view setNeedsLayout];

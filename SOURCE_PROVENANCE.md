@@ -1,15 +1,15 @@
 # Source provenance
 
-This tree was prepared from the finalized build 10 source-only snapshot,
-`moonlight-native-source-build10.tar.gz`, SHA-256
-`5a14014426166cc49f805817c8a28a702b6cac243b944efed1e04ad4d672ed68`.
+This tree was prepared from the finalized build 11 source-only snapshot,
+`moonlight-native-source-build11.tar.gz`, SHA-256
+`bc83dfc1fb6ae5a58322c6f2fe66341f43a36fae2582e3f9701fb8a08e67a7c8`.
 The archive itself and its development Git metadata are not published.
 
 - Moonlight iOS/tvOS base: `02dc9780496eeeac6d01c8bbdccb8b6fe71ef28a`
 - X1Kit base: `6e842ae9d5a21916d7c9693c7385d1ac672bc4fa`
 - moonlight-common-c base: `f900dd4767759c7b9d0e93bcea666b55c69ea62f`, with local modifications
 - Nested common-c dependencies and packaged libraries: vendored as supplied
-  in the verified build 10 source snapshot
+  in the verified build 11 source snapshot
 - Swift package lockfile: restored from the pinned Moonlight upstream revision
   because the source-only snapshot omitted it; it pins OpenSSL-Package
   `a3809db22a45e3ff658377a24da252982a306b9b`
